@@ -41,6 +41,19 @@ var spellMap = map[spell]string{
 	DeafeningBlast: "Deafening Blast",
 }
 
+var spellValue = map[rune]spell{
+	'Q' * 'Q' * 'Q': ColdSnap,
+	'Q' * 'Q' * 'W': GhostWalk,
+	'Q' * 'Q' * 'E': IceWall,
+	'W' * 'W' * 'W': EMP,
+	'W' * 'W' * 'Q': Tornado,
+	'W' * 'W' * 'E': Alacrity,
+	'E' * 'E' * 'E': SunStrike,
+	'E' * 'E' * 'Q': ForgeSpirit,
+	'E' * 'E' * 'W': ChaosMeteor,
+	'Q' * 'W' * 'E': DeafeningBlast,
+}
+
 type incantate map[spell]struct{}
 
 // model??? really??? in 2023???
@@ -163,45 +176,23 @@ func (m model) View() string {
 }
 
 func invoke(orbs []string) spell {
-	var count int
-	q, w, e := "Q", "W", "E" // cosmetic purpose
-	combo := make(map[string]int)
-	for _, o := range orbs {
-		if o == "" {
-			continue
-		}
-		combo[o]++
-		count++
-	}
-	if count < 3 {
+	if len(orbs) < 3 {
 		return Undefined
 	}
-	if combo[q] == 3 {
-		return ColdSnap
-	} else if combo[w] == 3 {
-		return EMP
-	} else if combo[e] == 3 {
-		return SunStrike
-	} else if combo[q] == 2 {
-		if combo[w] == 1 {
-			return GhostWalk
-		} else if combo[e] == 1 {
-			return IceWall
-		}
-	} else if combo[w] == 2 {
-		if combo[q] == 1 {
-			return Tornado
-		} else if combo[e] == 1 {
-			return Alacrity
-		}
-	} else if combo[e] == 2 {
-		if combo[q] == 1 {
-			return ForgeSpirit
-		} else if combo[w] == 1 {
-			return ChaosMeteor
-		}
+
+	// NOTE
+	// need to assign initial value to 1 (default 0)
+	// because in below we need do operation using multiplication
+	// to determine what type of spell
+	var invokerOrb rune = 1
+
+	orb := strings.Join(orbs, "")
+
+	for _, o := range orb {
+		invokerOrb *= o
 	}
-	return DeafeningBlast
+
+	return spellValue[invokerOrb]
 }
 
 // TODO performance?
@@ -231,5 +222,6 @@ func gen(prev incantate) (bool, incantate) {
 		}
 		next[n] = struct{}{}
 	}
+
 	return cast, next
 }
