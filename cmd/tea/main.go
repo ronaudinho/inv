@@ -41,6 +41,12 @@ var spellMap = map[spell]string{
 	DeafeningBlast: "Deafening Blast",
 }
 
+// spellValue
+// map invoker orb spells to invoker skills/spells.
+
+// the reason we use multiplication (*) here instead of addition (+) is that the
+// result wouldn't be unique with addition.
+// So, in this case, we opt for multiplication to ensure a unique value.
 var spellValue = map[rune]spell{
 	'Q' * 'Q' * 'Q': ColdSnap,
 	'Q' * 'Q' * 'W': GhostWalk,
