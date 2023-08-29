@@ -66,10 +66,14 @@ type incantate map[spell]struct{}
 // think of a better name
 // admittedly this is a copy paste from tutorial
 type model struct {
-	orbs      []string
-	invoked   []spell
-	cast      bool
+	orbs    []string
+	invoked []spell
+	cast    bool
+	// The reason we still keep the `incantate` map is to prevent unnecessary
+	// reordering of the `spells`(slice of string) each time
+	// a casting is triggered (when `d` and `f` are invoked).
 	incantate incantate
+	spells    []string
 	point     int
 }
 
@@ -79,7 +83,7 @@ func main() {
 		invoked:   make([]spell, 2, 2),
 		incantate: make(map[spell]struct{}),
 	}
-	m.cast, m.incantate = gen(nil)
+	m.cast, m.incantate, m.spells = gen(nil)
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
@@ -113,6 +117,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if _, ok := m.incantate[i]; ok {
 					delete(m.incantate, i)
 					m.point++
+
+					m.spells = reOrder(m.spells, spellMap[i])
 				}
 			}
 			if m.invoked[0] == i {
@@ -121,22 +127,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.invoked[1] = m.invoked[0]
 			m.invoked[0] = i
 		case "d":
+			// Invoke here to prevent unnecessary reordering of spells every time a user triggers
+			// a spell casting.
 			if _, ok := m.incantate[m.invoked[0]]; ok {
 				delete(m.incantate, m.invoked[0])
 				m.point++
+
+				m.spells = reOrder(m.spells, spellMap[m.invoked[0]])
 			}
 		case "f":
 			if _, ok := m.incantate[m.invoked[1]]; ok {
 				delete(m.incantate, m.invoked[1])
 				m.point++
+
+				m.spells = reOrder(m.spells, spellMap[m.invoked[0]])
 			}
 		}
 	}
 	if len(m.incantate) == 0 {
 		if !m.cast {
-			m.cast, m.incantate = gen(m.incantate)
+			m.cast, m.incantate, m.spells = gen(m.incantate)
 		} else {
-			m.cast, m.incantate = gen(nil)
+			m.cast, m.incantate, m.spells = gen(nil)
 		}
 	}
 	return m, nil
@@ -155,12 +167,8 @@ func (m model) View() string {
 		s += "INVOKE AND CAST\n\n"
 	}
 
-	var incantate []string
-	for k := range m.incantate {
-		incantate = append(incantate, spellMap[k])
-	}
 	s += "| "
-	s += strings.Join(incantate, " | ")
+	s += strings.Join(m.spells, " | ")
 	s += " |"
 	s += "\n--------------------------------------------------\n"
 
@@ -201,12 +209,28 @@ func invoke(orbs []string) spell {
 	return spellValue[invokerOrb]
 }
 
+// reOrder
+// Reordering the spells that will be displayed for the user to cast or invoke.
+// This reordering will be triggered if the user invokes or casts the correct answer.
+// The time complexity for this operation will be O(N).
+func reOrder(spells []string, answer string) []string {
+	newSpells := make([]string, 0, len(spells)-1)
+
+	for _, spell := range spells {
+		if spell != answer {
+			newSpells = append(newSpells, spell)
+		}
+	}
+
+	return newSpells
+}
+
 // TODO performance?
 // create random array of spells to incantate
 // it can either be 2 or 3 spells
 // if previous incantate is nil, create a new one with no overlap
 // else overlap is fine
-func gen(prev incantate) (bool, incantate) {
+func gen(prev incantate) (bool, incantate, []string) {
 	var cast bool
 	r := rand.New(rand.NewSource(time.Now().Unix()))
 	if c := r.Intn(2); c != 0 {
@@ -215,6 +239,9 @@ func gen(prev incantate) (bool, incantate) {
 
 	next := make(map[spell]struct{})
 	length := 2 + r.Intn(2)
+
+	spells := make([]string, 0, length)
+
 	// TODO check how many passes do we need to generate
 	for len(next) < length {
 		n := spell(1 + r.Intn(10)) // this will rarely gets to deafening?
@@ -227,7 +254,8 @@ func gen(prev incantate) (bool, incantate) {
 			continue
 		}
 		next[n] = struct{}{}
+		spells = append(spells, spellMap[n])
 	}
 
-	return cast, next
+	return cast, next, spells
 }
