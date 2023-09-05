@@ -62,19 +62,20 @@ var spellValue = map[rune]spell{
 type incantate map[spell]struct{}
 
 type model struct {
-	orbs    []string
-	invoked []spell
-	cast    bool
-	spell   spell
-	point   int
-	since   time.Time
+	orbs      []string
+	invoked   []spell
+	cast      bool
+	spell     spell
+	point     int
+	timeSince time.Time
+	record    float64
 }
 
 func main() {
 	m := model{
-		orbs:    make([]string, 3, 3),
-		invoked: make([]spell, 2, 2),
-		since:   time.Now(),
+		orbs:      make([]string, 3, 3),
+		invoked:   make([]spell, 2, 2),
+		timeSince: time.Now(),
 	}
 	m.spell = generate(0)
 	p := tea.NewProgram(m)
@@ -88,6 +89,8 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// NOTe
+	// to guard if the point is already 10, immediately quit
 	if m.point == 10 {
 		return m, tea.Quit
 	}
@@ -113,6 +116,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if i == m.spell {
 				m.spell = generate(i)
 				m.point++
+			}
+
+			if m.point == 10 {
+				m.record = time.Since(m.timeSince).Seconds()
 			}
 		}
 	}
@@ -149,10 +156,8 @@ func (m model) View() string {
 	s += fmt.Sprintf("%d POINTS\n\n", m.point)
 
 	if m.point == 10 {
-		timeSeconds := time.Since(m.since).Seconds()
-
 		s += "Your injoker classic Record is:\n"
-		s += fmt.Sprintf("%v Seconds\n\n", timeSeconds)
+		s += fmt.Sprintf("%v Seconds\n\n", m.record)
 	}
 
 	return s
