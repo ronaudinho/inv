@@ -89,12 +89,6 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// NOTe
-	// to guard if the point is already 10, immediately quit
-	if m.point == 10 {
-		return m, tea.Quit
-	}
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -120,6 +114,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if m.point == 10 {
 				m.record = time.Since(m.timeSince).Seconds()
+				return m, tea.Quit
 			}
 		}
 	}
@@ -156,8 +151,8 @@ func (m model) View() string {
 	s += fmt.Sprintf("%d POINTS\n\n", m.point)
 
 	if m.point == 10 {
-		s += "Your injoker classic Record is:\n"
-		s += fmt.Sprintf("%v Seconds\n\n", m.record)
+		s += "YOUR INJOKER CLASSIC RECORD IS:\n"
+		s += fmt.Sprintf("%v SECONDS\n\n", m.record)
 	}
 
 	return s
