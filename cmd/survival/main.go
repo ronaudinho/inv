@@ -74,11 +74,11 @@ type model struct {
 	// The reason we still keep the `incantate` map is to prevent unnecessary
 	// reordering of the `spells`(slice of string) each time
 	// a casting is triggered (when `d` and `f` are invoked).
-	incantate incantate
-	spells    []string
-	point     int
-	timer     timer.Model
-	isQuit    bool
+	incantate  incantate
+	spells     []string
+	timer      timer.Model
+	timeTaken  time.Time
+	timeRecord float64
 }
 
 func main() {
@@ -87,6 +87,7 @@ func main() {
 		orbs:      make([]string, 3, 3),
 		invoked:   make([]spell, 2, 2),
 		incantate: make(map[spell]struct{}),
+		timeTaken: time.Now(),
 	}
 	m.cast, m.incantate, m.spells = gen(nil)
 	p := tea.NewProgram(m)
@@ -121,8 +122,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.cast {
 				if _, ok := m.incantate[i]; ok {
 					delete(m.incantate, i)
-					m.point++
-
+					m.timer.Timeout = timeout
 					m.spells = reOrder(m.spells, spellMap[i])
 				}
 			}
@@ -136,17 +136,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// a spell casting.
 			if _, ok := m.incantate[m.invoked[0]]; ok {
 				delete(m.incantate, m.invoked[0])
-				m.point++
-				m.timer.Timeout += 2 * time.Second
-
+				m.timer.Timeout = timeout
 				m.spells = reOrder(m.spells, spellMap[m.invoked[0]])
 			}
 		case "f":
 			if _, ok := m.incantate[m.invoked[1]]; ok {
 				delete(m.incantate, m.invoked[1])
-				m.point++
-				m.timer.Timeout += 2 * time.Second
-
+				m.timer.Timeout = timeout
 				m.spells = reOrder(m.spells, spellMap[m.invoked[0]])
 			}
 		}
@@ -155,7 +151,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.timer, cmd = m.timer.Update(msg)
 		return m, cmd
 	case timer.TimeoutMsg:
-		m.isQuit = true
+		m.timeRecord = time.Since(m.timeTaken).Seconds()
 		return m, tea.Quit
 	}
 
@@ -200,8 +196,11 @@ func (m model) View() string {
 	}
 	s += "\n--------------------------------------------------\n"
 
-	s += fmt.Sprintf("%d POINTS\n\n", m.point)
 	s += m.timer.View()
+
+	if m.timer.Timeout == 0 {
+		s += fmt.Sprintf("\nYou Take Time %.0f Seconds\n\n", m.timeRecord)
+	}
 	return s
 }
 
@@ -247,10 +246,11 @@ func reOrder(spells []string, answer string) []string {
 // if previous incantate is nil, create a new one with no overlap
 // else overlap is fine
 func gen(prev incantate) (bool, incantate, []string) {
-	// var cast bool
-	cast := true
+	var cast bool
 	r := rand.New(rand.NewSource(time.Now().Unix()))
-
+	if c := r.Intn(2); c != 0 {
+		cast = true
+	}
 	next := make(map[spell]struct{})
 	length := 2
 
