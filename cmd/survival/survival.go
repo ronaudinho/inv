@@ -1,4 +1,4 @@
-package main
+package survival
 
 import (
 	"fmt"
@@ -81,7 +81,7 @@ type model struct {
 	timeRecord float64
 }
 
-func main() {
+func Survival() {
 	m := model{
 		timer:     timer.NewWithInterval(timeout, time.Second),
 		orbs:      make([]string, 3, 3),
