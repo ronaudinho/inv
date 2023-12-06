@@ -13,7 +13,6 @@ import (
 
 type spell int
 
-// TODO use Invoker responses
 const (
 	Undefined spell = iota
 	ColdSnap
@@ -26,7 +25,7 @@ const (
 	ForgeSpirit
 	ChaosMeteor
 	DeafeningBlast
-	timeout = time.Second * 10
+	timeout = time.Second * 30
 )
 
 var spellMap = map[spell]string{
@@ -43,12 +42,6 @@ var spellMap = map[spell]string{
 	DeafeningBlast: "Deafening Blast",
 }
 
-// spellValue
-// map invoker orb spells to invoker skills/spells.
-
-// the reason we use multiplication (*) here instead of addition (+) is that the
-// result wouldn't be unique with addition.
-// So, in this case, we opt for multiplication to ensure a unique value.
 var spellValue = map[rune]spell{
 	'Q' * 'Q' * 'Q': ColdSnap,
 	'Q' * 'Q' * 'W': GhostWalk,
@@ -64,21 +57,14 @@ var spellValue = map[rune]spell{
 
 type incantate map[spell]struct{}
 
-// model??? really??? in 2023???
-// think of a better name
-// admittedly this is a copy paste from tutorial
 type model struct {
-	orbs    []string
-	invoked []spell
-	cast    bool
-	// The reason we still keep the `incantate` map is to prevent unnecessary
-	// reordering of the `spells`(slice of string) each time
-	// a casting is triggered (when `d` and `f` are invoked).
-	incantate  incantate
-	spells     []string
-	timer      timer.Model
-	timeTaken  time.Time
-	timeRecord float64
+	orbs      []string
+	invoked   []spell
+	cast      bool
+	incantate incantate
+	spells    []string
+	point     int
+	timer     timer.Model
 }
 
 func main() {
@@ -87,7 +73,7 @@ func main() {
 		orbs:      make([]string, 3, 3),
 		invoked:   make([]spell, 2, 2),
 		incantate: make(map[spell]struct{}),
-		timeTaken: time.Now(),
+		cast:      true,
 	}
 	m.cast, m.incantate, m.spells = gen(nil)
 	p := tea.NewProgram(m)
@@ -97,9 +83,6 @@ func main() {
 }
 
 func (m model) Init() tea.Cmd {
-	// TODO init spells to incantate
-	// can be 2 or 3 spells
-	// can require casting or not
 	return m.timer.Init()
 }
 
@@ -109,7 +92,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
-		case "q", "w", "e": // handle upper case?
+		case "q", "w", "e":
 			m.orbs[2] = m.orbs[1]
 			m.orbs[1] = m.orbs[0]
 			m.orbs[0] = strings.ToUpper(msg.String())
@@ -118,11 +101,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if i == Undefined {
 				break
 			}
-			// if stage only requires invoking, we can still count?
+
 			if !m.cast {
 				if _, ok := m.incantate[i]; ok {
 					delete(m.incantate, i)
-					m.timer.Timeout = timeout
 					m.spells = reOrder(m.spells, spellMap[i])
 				}
 			}
@@ -132,17 +114,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.invoked[1] = m.invoked[0]
 			m.invoked[0] = i
 		case "d":
-			// Invoke here to prevent unnecessary reordering of spells every time a user triggers
-			// a spell casting.
 			if _, ok := m.incantate[m.invoked[0]]; ok {
 				delete(m.incantate, m.invoked[0])
-				m.timer.Timeout = timeout
 				m.spells = reOrder(m.spells, spellMap[m.invoked[0]])
 			}
 		case "f":
 			if _, ok := m.incantate[m.invoked[1]]; ok {
 				delete(m.incantate, m.invoked[1])
-				m.timer.Timeout = timeout
 				m.spells = reOrder(m.spells, spellMap[m.invoked[0]])
 			}
 		}
@@ -151,24 +129,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.timer, cmd = m.timer.Update(msg)
 		return m, cmd
 	case timer.TimeoutMsg:
-		m.timeRecord = time.Since(m.timeTaken).Seconds()
 		return m, tea.Quit
 	}
 
 	if len(m.incantate) == 0 {
 		if !m.cast {
 			m.cast, m.incantate, m.spells = gen(m.incantate)
+			m.point++
 		} else {
 			m.cast, m.incantate, m.spells = gen(nil)
+			m.point++
 		}
 	}
 	return m, nil
 }
 
-// TODO allocate slice
-// use strings builder
-// nice box
-// !!! center div Kappa
 func (m model) View() string {
 	var s string
 
@@ -196,10 +171,9 @@ func (m model) View() string {
 	}
 	s += "\n--------------------------------------------------\n"
 
-	s += m.timer.View()
-
 	if m.timer.Timeout == 0 {
-		s += fmt.Sprintf("\nYou Take Time %.0f Seconds\n\n", m.timeRecord)
+		s += "Hattrick Game Finished\n\n"
+		s += fmt.Sprintf("You Make %d Combos\n\n", m.point)
 	}
 	return s
 }
@@ -209,10 +183,6 @@ func invoke(orbs []string) spell {
 		return Undefined
 	}
 
-	// NOTE
-	// need to assign initial value to 1 (default 0)
-	// because in below we need do operation using multiplication
-	// to determine what type of spell
 	var invokerOrb rune = 1
 
 	orb := strings.Join(orbs, "")
@@ -224,10 +194,6 @@ func invoke(orbs []string) spell {
 	return spellValue[invokerOrb]
 }
 
-// reOrder
-// Reordering the spells that will be displayed for the user to cast or invoke.
-// This reordering will be triggered if the user invokes or casts the correct answer.
-// The time complexity for this operation will be O(N).
 func reOrder(spells []string, answer string) []string {
 	newSpells := make([]string, 0, len(spells)-1)
 
@@ -240,25 +206,16 @@ func reOrder(spells []string, answer string) []string {
 	return newSpells
 }
 
-// TODO performance?
-// create random array of spells to incantate
-// it can either be 2 or 3 spells
-// if previous incantate is nil, create a new one with no overlap
-// else overlap is fine
 func gen(prev incantate) (bool, incantate, []string) {
-	var cast bool
+	cast := true
 	r := rand.New(rand.NewSource(time.Now().Unix()))
-	if c := r.Intn(2); c != 0 {
-		cast = true
-	}
+
 	next := make(map[spell]struct{})
-	length := 2
 
-	spells := make([]string, 0, length)
+	spells := make([]string, 0, 2)
 
-	// TODO check how many passes do we need to generate
-	for len(next) < length {
-		n := spell(1 + r.Intn(10)) // this will rarely gets to deafening?
+	for len(next) < 3 {
+		n := spell(1 + r.Intn(10))
 		if prev != nil {
 			if _, ok := prev[n]; ok {
 				continue
